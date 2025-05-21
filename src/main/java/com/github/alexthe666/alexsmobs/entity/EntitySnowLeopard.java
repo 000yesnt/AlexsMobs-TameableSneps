@@ -1,5 +1,6 @@
 package com.github.alexthe666.alexsmobs.entity;
 
+import com.github.alexthe666.alexsmobs.AlexsMobs;
 import com.github.alexthe666.alexsmobs.config.AMConfig;
 import com.github.alexthe666.alexsmobs.entity.ai.*;
 import com.github.alexthe666.alexsmobs.misc.AMSoundRegistry;
@@ -13,9 +14,12 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -27,16 +31,19 @@ import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.Vec3;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-public class EntitySnowLeopard extends Animal implements IAnimatedEntity, ITargetsDroppedItems {
+public class EntitySnowLeopard extends TamableAnimal implements IAnimatedEntity, ITargetsDroppedItems, IFollower {
 
     public static final Animation ANIMATION_ATTACK_R = Animation.create(13);
     public static final Animation ANIMATION_ATTACK_L = Animation.create(13);
@@ -57,6 +64,7 @@ public class EntitySnowLeopard extends Animal implements IAnimatedEntity, ITarge
     private int maxSitTime = 75;
     public float prevSleepProgress;
     public float sleepProgress;
+    private boolean forcedToSit = false;
 
     protected EntitySnowLeopard(EntityType type, Level worldIn) {
         super(type, worldIn);
@@ -87,11 +95,13 @@ public class EntitySnowLeopard extends Animal implements IAnimatedEntity, ITarge
     }
 
     protected void registerGoals() {
+        this.goalSelector.addGoal(0, new SitWhenOrderedToGoal(this));
         this.goalSelector.addGoal(1, new FloatGoal(this));
         this.goalSelector.addGoal(2, new AnimalAIPanicBaby(this, 1.25D));
         this.goalSelector.addGoal(3, new SnowLeopardAIMelee(this));
         this.goalSelector.addGoal(5, new BreedGoal(this, 1.0D));
         this.goalSelector.addGoal(6, new FollowParentGoal(this, 1.1D));
+        this.goalSelector.addGoal(7, new TameableAIFollowOwner(this, 1.0D, 10.0F, 2.0F, false));
         this.goalSelector.addGoal(7, new RandomStrollGoal(this,  1.0D, 70));
         this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 15.0F));
         this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
@@ -219,11 +229,11 @@ public class EntitySnowLeopard extends Animal implements IAnimatedEntity, ITarge
             this.yBodyRot = this.getYRot();
         }
         if(!this.level().isClientSide) {
-            if (this.getTarget() != null && (this.isSitting() || this.isSleeping())) {
+            if (this.getTarget() != null && (this.isSitting() || this.isSleeping()) && !forcedToSit) {
                 this.setSitting(false);
                 this.setSleeping(false);
             }
-            if ((isSitting() || isSleeping()) && (++sittingTime > maxSitTime || this.getTarget() != null || this.isInLove() || this.isInWaterOrBubble())) {
+            if ((isSitting() || isSleeping()) && (++sittingTime > maxSitTime || this.getTarget() != null || this.isInLove() || this.isInWaterOrBubble()) && !forcedToSit) {
                 this.setSitting(false);
                 this.setSleeping(false);
                 sittingTime = 0;
@@ -279,6 +289,93 @@ public class EntitySnowLeopard extends Animal implements IAnimatedEntity, ITarge
             vec3d = Vec3.ZERO;
         }
         super.travel(vec3d);
+    }
+
+    private Boolean isForcedToSit() { return forcedToSit; }
+
+    private void setForcedToSit(Boolean state) {
+        forcedToSit = state;
+        this.setSitting(state);
+    }
+
+    @Override
+    @Nonnull
+    public InteractionResult mobInteract(@Nonnull Player player, @Nonnull InteractionHand hand) {
+        ItemStack itemstack = player.getItemInHand(hand);
+        Item item = itemstack.getItem();
+        InteractionResult type = super.mobInteract(player, hand);
+
+        final boolean tame = isTame();
+        if (!tame && itemstack.is(AMTagRegistry.SNOW_LEOPARD_BREEDABLES)) {
+            this.usePlayerItem(player, hand, itemstack);
+            this.gameEvent(GameEvent.EAT);
+            if(random.nextBoolean()) {
+                this.tame(player);
+                this.level().broadcastEntityEvent(this, (byte) 7);
+            } else {
+                this.level().broadcastEntityEvent(this, (byte) 6);
+            }
+            return InteractionResult.SUCCESS;
+        } else if (itemstack.is(AMTagRegistry.SNOW_LEOPARD_BREEDABLES) && this.getHealth() < this.getMaxHealth()) {
+            AlexsMobs.LOGGER.debug("snep eat: {}< {}", this.getHealth(), this.getMaxHealth());
+            this.onEatItem();
+            itemstack.shrink(1);
+            return InteractionResult.SUCCESS;
+        }
+        InteractionResult interactionresult = itemstack.interactLivingEntity(player, this, hand);
+        if (interactionresult != InteractionResult.SUCCESS && type != InteractionResult.SUCCESS && isTame() && isOwnedBy(player)) {
+            AlexsMobs.LOGGER.debug("snep interactionResult");
+            sittingTime = 0;
+            if(!this.isSitting()) {
+                this.setForcedToSit(true);
+                AlexsMobs.LOGGER.debug("snep forced to sit by player");
+            } else {
+                maxSitTime = 0;
+                this.setForcedToSit(false);
+                AlexsMobs.LOGGER.debug("snep forced to unsit by player");
+            }
+            return InteractionResult.SUCCESS;
+        }
+
+        return type;
+    }
+
+    public boolean isAlliedTo(Entity entityIn) {
+        if (this.isTame()) {
+            LivingEntity livingentity = this.getOwner();
+            if (entityIn == livingentity) {
+                return true;
+            }
+            if (entityIn instanceof TamableAnimal) {
+                return ((TamableAnimal) entityIn).isOwnedBy(livingentity);
+            }
+            if (livingentity != null) {
+                return livingentity.isAlliedTo(entityIn);
+            }
+        }
+        return super.isAlliedTo(entityIn);
+    }
+
+    @Override
+    public boolean shouldFollow() { return !this.isSitting() && !this.isSleeping(); }
+
+    public void setOrderedToSit(boolean sit) {
+        AlexsMobs.LOGGER.debug("snep setOrderedToSit called");
+        sittingTime = 0;
+        if(sit) {
+            maxSitTime = 99999999;
+        } else {
+            maxSitTime = 1;
+        }
+        this.setSitting(sit);
+        super.setOrderedToSit(sit);
+    }
+
+    public void onEatItem() {
+        this.heal(10);
+        this.level().broadcastEntityEvent(this, (byte) 92);
+        this.gameEvent(GameEvent.EAT);
+        this.playSound(SoundEvents.GENERIC_EAT, this.getSoundVolume(), this.getVoicePitch());
     }
 
     protected boolean isImmobile() {

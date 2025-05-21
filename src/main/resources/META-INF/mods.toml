@@ -4,11 +4,11 @@ license="GNU LESSER GENERAL PUBLIC LICENSE"
 issueTrackerURL="https://github.com/Alex-the-666/AlexsMobs/issues" #optional
 [[mods]] #mandatory
 modId="alexsmobs" #mandatory
-version="1.22.9" #mandatory
-displayName="Alex's Mobs" #mandatory
+version="1.22.9+UNOFFICIAL-SNEPS.1" #mandatory
+displayName="Alex's Mobs (+ Tameable Snow Leopards)" #mandatory
 displayURL="https://www.curseforge.com/minecraft/mc-mods/alexs-mobs" #optional
 authors="Alexthe668, Carro1001, Paint_Ninja" #optional
-description='''New, original, engaging, and aesthetic mobs for Minecraft.'''
+description='''New, original, engaging, and aesthetic mobs for Minecraft. Modified to allow snow leopard taming.'''
 [[dependencies.alexsmobs]] #optional
     # the modid of the dependency
     modId="citadel" #mandatory
