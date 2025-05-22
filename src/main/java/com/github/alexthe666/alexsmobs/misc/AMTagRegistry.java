@@ -156,6 +156,7 @@ public class AMTagRegistry {
     public static final TagKey<Item> SHOEBILL_LUCK_FOODS = registerItemTag("shoebill_luck_foods");
     public static final TagKey<Item> SKUNK_BREEDABLES = registerItemTag("skunk_breedables");
     public static final TagKey<Item> SNOW_LEOPARD_BREEDABLES = registerItemTag("snow_leopard_breedables");
+    public static final TagKey<Item> SNOW_LEOPARD_DANCE_ITEMS = registerItemTag("snow_leopard_dance");
     public static final TagKey<Item> STRADPOLE_GROWABLES = registerItemTag("stradpole_growables");
     public static final TagKey<Item> SUGAR_GLIDER_BREEDABLES = registerItemTag("sugar_glider_breedables");
     public static final TagKey<Item> SUGAR_GLIDER_TAMEABLES = registerItemTag("sugar_glider_tameables");

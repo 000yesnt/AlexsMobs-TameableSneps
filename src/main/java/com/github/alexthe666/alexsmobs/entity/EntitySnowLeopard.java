@@ -321,6 +321,16 @@ public class EntitySnowLeopard extends TamableAnimal implements IAnimatedEntity,
             this.onEatItem();
             itemstack.shrink(1);
             return InteractionResult.SUCCESS;
+        } else if (itemstack.is(AMTagRegistry.SNOW_LEOPARD_DANCE_ITEMS)) {
+            // Sit the snow leopard down without setting forcedToSit. This will make it stand up in the next tick,
+            // resulting in a silly little dance.
+            if (this.isForcedToSit()) {
+                this.setForcedToSit(false);
+            }
+            this.maxSitTime = 0;
+            this.sittingTime = 0;
+            this.setSitting(true);
+            return InteractionResult.SUCCESS;
         }
         InteractionResult interactionresult = itemstack.interactLivingEntity(player, this, hand);
         if (interactionresult != InteractionResult.SUCCESS && type != InteractionResult.SUCCESS && isTame() && isOwnedBy(player)) {
